@@ -1,0 +1,91 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import yfinance as yf
+
+from yahoofinancials import YahooFinancials
+import plotly.graph_objects as go
+import plotly.io as pio
+#from stldecompose import decompose
+#from statsmodels.tsa.filters._utils import  _get_pandas_wrapper
+from statsmodels.tsa.seasonal import seasonal_decompose
+pio.renderers
+#pio.renderers.default = 'notebook'
+#pio.renderers.default = "notebook_connected"
+#pio.renderers.default = "vscode"
+#pio.renderers.default = 'plotly_mimetype+notebook'
+pio.renderers.default = "browser"
+
+
+# Yahoo Finans'dan Apple hissesinin 1 Ocak 2021'den günümüze kadar olan verilerini çekiyoruz
+apple_df = yf.download('GOOGL', start = '2020-10-10', progress=False)
+
+# Tarihe göre düzenleyiyoruz
+apple_df.index = pd.to_datetime(apple_df.index)
+
+print (apple_df)
+
+# İlgili veriyi görselleştiriyoruz
+gorsel = go.Figure(data=[go.Candlestick(x=apple_df.index,
+                                        open=apple_df['Open'],
+                                        high=apple_df['High'],
+                                        low=apple_df['Low'],
+                                        close=apple_df['Close'])])
+
+# gorsel.show() # Bunu resim olarak göremedik.
+# gorsel.write_html('tmp.html', auto_open=True) # Bu browser'da çalışıyor.
+
+# apple_df.describe() bize tanımlıyıcı istetiği verir. Bu bilgiyle bir verinin dağılımı hakkında yorum yapılabilir. 
+# Anladığım kadarıyla, eğer 50%'deki çıktı 'mean'deki veriden farklıysa, hissenin düşeceği veya yükseleceği hakkında bilgi verecektir.
+print(apple_df.describe())
+
+# ZAMAN SERİSİ AYRIŞIMI
+
+# Toplamsal yaklaşım
+# y = T + S + R
+
+# Belirtilen hissenin kapanış değerleri df_close değişkenine aktarılıyor.
+df_close = apple_df['Close']
+
+# Mevsimsel, trend ve belirsizliklerin ayrıştırılması sağlanıyor.
+decomp = seasonal_decompose(df_close.values, period=365)
+# İlgili veriler proje path'ine mevsimsel.png ismiyle kayıt ediliyor.
+decomp.plot().savefig('mevsimsel.png',dpi = 150)
+
+# Grafikte kullanılan verilein dizi içerisindeki halini ekran yazıyor.
+#print(decomp.seasonal)
+
+positions = np.arange(1,len(df_close),90)
+labels = positions
+
+# Üstteki örnekte 200 günlük kesitler halinde gösteriyordu. Onu 90 günlüğe çevirmek amaçlandı.
+doksan_gunluk = plt.xticks(positions,labels)
+
+trend = decomp.trend
+seasonal = decomp.seasonal
+residual = decomp.resid
+
+# Close değeri alınıyor.
+# close_app = apple_df.iloc[(len(apple_df)//2):,3] # Toplam veriyi yarıya düşürmek için
+close_app = apple_df.iloc[:,3]
+
+# head() ile ilk 5 satırı yazdırılıyor.
+print(close_app.head())
+
+# 3 ayrı hareketli ortalaması alınıyor. 5, 14, 21 günlük hareketli ortalamaları bir değişkene aktarılıyor.
+rolling_app5 = close_app.rolling(window=5).mean()
+rolling_app14 = close_app.rolling(window=14).mean()
+rolling_app21 = close_app.rolling(window=21).mean()
+
+
+MAs = pd.concat([close_app,rolling_app5,rolling_app14,rolling_app21], axis=1)
+MAs.columns = ['Close', 'Close_5', 'Close_14', 'Close_21']
+print(MAs.head(30))
+
+gorsel, ax = plt.subplots(figsize=(20,10))
+ax.plot(close_app.index, close_app, label='Apple')
+ax.plot(rolling_app5.index,rolling_app5, label='5 days rolling')
+ax.plot(rolling_app14.index,rolling_app14, label='14 days rolling')
+ax.plot(rolling_app21.index,rolling_app21, label='21 days rolling')
+#ax.legend(loc='upper left').savefig('hareketli_ortalama.png', dpi=150)
+ax.savefig('hareketli_ortalama.png', dpi=150)
